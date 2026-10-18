@@ -1,0 +1,5 @@
+.env
+backups/
+*.opml
+.DS_Store
+*.local.*
