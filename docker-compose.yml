@@ -1,0 +1,36 @@
+# MCU RSS: FreshRSS + RSS-Bridge, published at rss.thedataareclean.com via Cloudflare Tunnel.
+services:
+  freshrss:
+    image: freshrss/freshrss:latest
+    container_name: freshrss
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Kolkata
+      CRON_MIN: "*/20"          # refresh feeds every 20 minutes
+    volumes:
+      - freshrss_data:/var/www/FreshRSS/data
+      - freshrss_extensions:/var/www/FreshRSS/extensions
+    ports:
+      - "127.0.0.1:8080:80"     # local only; the tunnel handles outside access
+
+  rss-bridge:
+    image: rssbridge/rss-bridge:latest
+    container_name: rss-bridge
+    restart: unless-stopped
+    volumes:
+      - ./rss-bridge:/config
+    # no published port: FreshRSS reaches it at http://rss-bridge
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      - freshrss
+
+volumes:
+  freshrss_data:
+  freshrss_extensions:
