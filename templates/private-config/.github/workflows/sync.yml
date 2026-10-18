@@ -1,0 +1,40 @@
+name: sync
+on:
+  schedule:
+    - cron: "30 21 * * *"   # 03:00 IST
+  push:
+    paths: [feeds.opml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      API: ${{ secrets.FRESHRSS_URL }}/api/greader.php
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in
+        run: |
+          auth=$(curl -fsS "$API/accounts/ClientLogin" \
+            --data-urlencode "Email=${{ secrets.FRESHRSS_USER }}" \
+            --data-urlencode "Passwd=${{ secrets.FRESHRSS_API_PASSWORD }}" | sed -n 's/^Auth=//p')
+          echo "::add-mask::$auth"
+          echo "AUTH=$auth" >> "$GITHUB_ENV"
+      - name: Import feeds.opml into FreshRSS
+        if: github.event_name == 'push'
+        run: |
+          curl -fsS -H "Authorization: GoogleLogin auth=$AUTH" -H "Content-Type: application/xml" \
+            --data-binary @feeds.opml "$API/reader/api/0/subscription/import"
+      - name: Export subscriptions to feeds.opml
+        run: |
+          curl -fsS -H "Authorization: GoogleLogin auth=$AUTH" \
+            "$API/reader/api/0/subscription/export" > feeds.opml
+      - name: Commit changes
+        run: |
+          git config user.name "rss-sync"
+          git config user.email "rss-sync@users.noreply.github.com"
+          git add feeds.opml
+          git diff --cached --quiet || { git commit -m "Sync feeds from FreshRSS"; git push; }
